@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Streamline</title>
+    <meta
+      name="description"
+      content="Streamline legal discovery and playback portal"
+    />
+    <meta
+      property="og:title"
+      content="Streamline"
+    />
+    <meta
+      property="og:description"
+      content="Discover movies and shows with secure in-site playback"
+    />
+    <meta
+      name="referrer"
+      content="strict-origin-when-cross-origin"
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://image.tmdb.org https://*.tmdb.org https:; connect-src 'self' https://api.themoviedb.org https://*.tmdb.org; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests;"
+    />
+    <style>
+      html,
+      body,
+      #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+        background: linear-gradient(to bottom right, #0f172a, #581c87, #0f172a);
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script
+      type="module"
+      src="/src/main.jsx"
+    ></script>
+  </body>
+</html>
