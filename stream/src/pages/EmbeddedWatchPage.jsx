@@ -1,6 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, Maximize, Pause, PictureInPicture2, Play, RotateCcw, RotateCw } from 'lucide-react';
+import { getTvSeasonDetails } from '../services/tmdb';
+import { getBackdropUrl } from '../utils/media';
+import { formatClock, getEpisodePosition, saveEpisodePosition, saveSeriesEpisode } from '../utils/episodeProgress';
 
 function fillTemplate(template, values) {
   if (!template) {
@@ -14,7 +17,10 @@ function fillTemplate(template, values) {
 
 export default function EmbeddedWatchPage() {
   const { tmdbId, season, episode } = useParams();
+  const navigate = useNavigate();
   const isTvRoute = Boolean(season && episode);
+  const seasonNumber = Number(season || 1);
+  const episodeNumber = Number(episode || 1);
   const videoRef = useRef(null);
   const touchMeta = useRef({
     startX: 0,
@@ -28,6 +34,14 @@ export default function EmbeddedWatchPage() {
   const [brightness, setBrightness] = useState(1);
   const [isPipActive, setIsPipActive] = useState(false);
   const [gestureLabel, setGestureLabel] = useState('');
+  const [seasonData, setSeasonData] = useState(null);
+  const [seasonLoading, setSeasonLoading] = useState(false);
+  const [seasonError, setSeasonError] = useState('');
+  const [autoplayEnabled, setAutoplayEnabled] = useState(true);
+  const [nextCountdown, setNextCountdown] = useState(0);
+  const [resumeSeconds, setResumeSeconds] = useState(0);
+
+  const lastSavedSecondRef = useRef(-1);
 
   const movieTemplate = import.meta.env.VITE_LEGAL_PLAYER_URL_TEMPLATE_MOVIE || '';
   const tvTemplate = import.meta.env.VITE_LEGAL_PLAYER_URL_TEMPLATE_TV || '';
@@ -40,6 +54,103 @@ export default function EmbeddedWatchPage() {
 
   const hasEmbed = embedUrl.startsWith('https://') || embedUrl.startsWith('http://');
   const isDirectVideo = /\.(mp4|webm|ogg|m3u8)(\?.*)?$/i.test(embedUrl);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSeason() {
+      if (!isTvRoute || !Number.isFinite(seasonNumber) || seasonNumber < 1) {
+        setSeasonData(null);
+        setSeasonError('');
+        return;
+      }
+
+      try {
+        setSeasonLoading(true);
+        setSeasonError('');
+        const data = await getTvSeasonDetails(tmdbId, seasonNumber);
+        if (!ignore) {
+          setSeasonData(data);
+        }
+      } catch {
+        if (!ignore) {
+          setSeasonData(null);
+          setSeasonError('Could not load season data. You can still enter episode numbers manually.');
+        }
+      } finally {
+        if (!ignore) {
+          setSeasonLoading(false);
+        }
+      }
+    }
+
+    loadSeason();
+    return () => {
+      ignore = true;
+    };
+  }, [isTvRoute, seasonNumber, tmdbId]);
+
+  const maxEpisodes = seasonData?.episodes?.length || null;
+  const episodeCards = seasonData?.episodes || [];
+
+  const goToTvEpisode = (nextSeason, nextEpisode) => {
+    const safeSeason = Math.max(1, Math.floor(nextSeason));
+    const safeEpisode = Math.max(1, Math.floor(nextEpisode));
+    setNextCountdown(0);
+    navigate(`/tv/${tmdbId}/${safeSeason}/${safeEpisode}`);
+  };
+
+  const goToNextEpisode = () => {
+    if (!isTvRoute) {
+      return;
+    }
+
+    if (maxEpisodes && episodeNumber >= maxEpisodes) {
+      goToTvEpisode(seasonNumber + 1, 1);
+      return;
+    }
+
+    goToTvEpisode(seasonNumber, episodeNumber + 1);
+  };
+
+  const goToPreviousEpisode = () => {
+    if (!isTvRoute) {
+      return;
+    }
+
+    if (episodeNumber > 1) {
+      goToTvEpisode(seasonNumber, episodeNumber - 1);
+    }
+  };
+
+  useEffect(() => {
+    if (!isTvRoute) {
+      return;
+    }
+
+    saveSeriesEpisode(tmdbId, seasonNumber, episodeNumber);
+  }, [episodeNumber, isTvRoute, seasonNumber, tmdbId]);
+
+  useEffect(() => {
+    if (!nextCountdown || !isTvRoute) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setNextCountdown((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          goToNextEpisode();
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isTvRoute, nextCountdown]);
 
   const togglePlay = async () => {
     if (!videoRef.current) {
@@ -154,6 +265,47 @@ export default function EmbeddedWatchPage() {
     window.setTimeout(() => setGestureLabel(''), 700);
   };
 
+  const onVideoLoadedMetadata = () => {
+    if (!isTvRoute || !isDirectVideo || !videoRef.current) {
+      return;
+    }
+
+    const savedPosition = getEpisodePosition(tmdbId, seasonNumber, episodeNumber);
+    const duration = Number(videoRef.current.duration || 0);
+    if (savedPosition > 20 && (!duration || savedPosition < duration - 20)) {
+      setResumeSeconds(savedPosition);
+    } else {
+      setResumeSeconds(0);
+    }
+  };
+
+  const onVideoTimeUpdate = () => {
+    if (!isTvRoute || !isDirectVideo || !videoRef.current) {
+      return;
+    }
+
+    const currentSecond = Math.floor(videoRef.current.currentTime || 0);
+    if (currentSecond - lastSavedSecondRef.current >= 5) {
+      lastSavedSecondRef.current = currentSecond;
+      saveEpisodePosition(tmdbId, seasonNumber, episodeNumber, currentSecond);
+    }
+  };
+
+  const onVideoEnded = () => {
+    if (isTvRoute && autoplayEnabled) {
+      setNextCountdown(8);
+    }
+  };
+
+  const resumePlayback = () => {
+    if (!videoRef.current || !resumeSeconds) {
+      return;
+    }
+
+    videoRef.current.currentTime = resumeSeconds;
+    setResumeSeconds(0);
+  };
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
       <div className="mb-4 text-sm text-stone-300">
@@ -167,6 +319,100 @@ export default function EmbeddedWatchPage() {
         <p className="mt-2 text-sm text-stone-300">
           Route: <span className="text-amber-200">/{isTvRoute ? `tv/${tmdbId}/${season}/${episode}` : `movie/${tmdbId}`}</span>
         </p>
+
+        {isTvRoute && (
+          <div className="mt-4 rounded-lg border border-stone-700/70 bg-stone-950/70 p-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-xs text-stone-300">
+                Season
+                <input
+                  type="number"
+                  min="1"
+                  value={seasonNumber}
+                  onChange={(event) => goToTvEpisode(Number(event.target.value || 1), episodeNumber)}
+                  className="mt-1 w-24 rounded-md border border-stone-600 bg-stone-900 px-2 py-1.5 text-sm text-stone-100"
+                />
+              </label>
+
+              <label className="text-xs text-stone-300">
+                Episode
+                <input
+                  type="number"
+                  min="1"
+                  max={maxEpisodes || undefined}
+                  value={episodeNumber}
+                  onChange={(event) => goToTvEpisode(seasonNumber, Number(event.target.value || 1))}
+                  className="mt-1 w-24 rounded-md border border-stone-600 bg-stone-900 px-2 py-1.5 text-sm text-stone-100"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={goToPreviousEpisode}
+                disabled={episodeNumber <= 1}
+                className="rounded-md border border-stone-600 px-3 py-2 text-sm text-stone-100 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous Episode
+              </button>
+
+              <button
+                type="button"
+                onClick={goToNextEpisode}
+                className="rounded-md bg-amber-300 px-3 py-2 text-sm font-semibold text-stone-900 hover:bg-amber-200"
+              >
+                Next Episode
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAutoplayEnabled((prev) => !prev)}
+                className={`rounded-md border px-3 py-2 text-sm ${
+                  autoplayEnabled
+                    ? 'border-emerald-400 bg-emerald-950/40 text-emerald-200'
+                    : 'border-stone-600 text-stone-200 hover:bg-stone-800'
+                }`}
+              >
+                Autoplay Next: {autoplayEnabled ? 'On' : 'Off'}
+              </button>
+            </div>
+
+            <p className="mt-2 text-xs text-stone-300">
+              {seasonLoading && 'Loading season episodes...'}
+              {!seasonLoading && maxEpisodes && `Season ${seasonNumber} has ${maxEpisodes} episodes.`}
+              {!seasonLoading && !maxEpisodes && !seasonError && 'Episode count unavailable for this season.'}
+              {seasonError && ` ${seasonError}`}
+            </p>
+
+            {!!episodeCards.length && (
+              <div className="mt-3 overflow-x-auto rounded-lg border border-stone-700/60 bg-stone-900/70 p-2">
+                <div className="flex gap-2 pb-1">
+                  {episodeCards.map((item) => {
+                    const active = item.episode_number === episodeNumber;
+                    return (
+                      <button
+                        key={item.id || `${seasonNumber}-${item.episode_number}`}
+                        type="button"
+                        onClick={() => goToTvEpisode(seasonNumber, item.episode_number)}
+                        className={`w-52 shrink-0 rounded-lg border p-2 text-left ${
+                          active ? 'border-amber-300 bg-amber-300/20' : 'border-stone-600 bg-stone-900/80 hover:bg-stone-800'
+                        }`}
+                      >
+                        <div className="mb-2 h-24 overflow-hidden rounded-md bg-stone-800">
+                          {item.still_path ? (
+                            <img src={getBackdropUrl(item.still_path)} alt={`Episode ${item.episode_number}`} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-[11px] text-stone-400">No image</div>
+                          )}
+                        </div>
+                        <p className="text-xs font-semibold text-stone-100">E{item.episode_number}: {item.name || 'Untitled'}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {hasEmbed ? (
           <div className="mt-4 space-y-3">
@@ -188,10 +434,29 @@ export default function EmbeddedWatchPage() {
                     playsInline
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
+                    onLoadedMetadata={onVideoLoadedMetadata}
+                    onTimeUpdate={onVideoTimeUpdate}
+                    onEnded={onVideoEnded}
                   />
                   {gestureLabel && (
                     <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs text-white">
                       {gestureLabel}
+                    </div>
+                  )}
+
+                  {resumeSeconds > 0 && (
+                    <button
+                      type="button"
+                      onClick={resumePlayback}
+                      className="absolute left-3 top-3 rounded-full bg-amber-300 px-3 py-1 text-xs font-semibold text-stone-900"
+                    >
+                      Resume from {formatClock(resumeSeconds)}
+                    </button>
+                  )}
+
+                  {nextCountdown > 0 && (
+                    <div className="absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full bg-black/80 px-3 py-1 text-xs text-white">
+                      Next episode in {nextCountdown}s
                     </div>
                   )}
                 </div>

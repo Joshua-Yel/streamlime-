@@ -25,7 +25,7 @@
     />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://image.tmdb.org https://*.tmdb.org https:; connect-src 'self' https://api.themoviedb.org https://*.tmdb.org; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests;"
+      content="default-src 'self' http://localhost:3000 http://localhost:3001 https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000 http://localhost:3001 https: https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://image.tmdb.org https://*.tmdb.org https:; connect-src 'self' http://localhost:3000 http://localhost:3001 ws://localhost:3000 ws://localhost:3001 https://api.themoviedb.org https://*.tmdb.org https://*.videasy.net https: https://static.cloudflareinsights.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.videasy.net https:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
     />
     <style>
       html,
@@ -46,6 +46,9 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      var __DEFINES__ = {};
+    </script>
     <script
       type="module"
       src="/src/main.jsx"
