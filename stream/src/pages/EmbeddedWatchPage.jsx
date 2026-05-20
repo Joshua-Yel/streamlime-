@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, Maximize, Pause, PictureInPicture2, Play, RotateCcw, RotateCw } from 'lucide-react';
+import Hls from 'hls.js';
+import dashjs from 'dashjs';
 import { getTvSeasonDetails } from '../services/tmdb';
 import { getBackdropUrl } from '../utils/media';
 import { formatClock, getEpisodePosition, saveEpisodePosition, saveSeriesEpisode } from '../utils/episodeProgress';
@@ -22,6 +24,8 @@ export default function EmbeddedWatchPage() {
   const seasonNumber = Number(season || 1);
   const episodeNumber = Number(episode || 1);
   const videoRef = useRef(null);
+  const hlsRef = useRef(null);
+  const dashRef = useRef(null);
   const touchMeta = useRef({
     startX: 0,
     startY: 0,
@@ -53,7 +57,76 @@ export default function EmbeddedWatchPage() {
   }, [episode, isTvRoute, movieTemplate, season, tmdbId, tvTemplate]);
 
   const hasEmbed = embedUrl.startsWith('https://') || embedUrl.startsWith('http://');
-  const isDirectVideo = /\.(mp4|webm|ogg|m3u8)(\?.*)?$/i.test(embedUrl);
+  const isSecureEmbed = embedUrl.startsWith('https://');
+  const isDirectVideo = /\.(mp4|webm|ogg|m3u8|mpd)(\?.*)?$/i.test(embedUrl);
+  const isHlsSource = /\.m3u8(\?.*)?$/i.test(embedUrl);
+  const isDashSource = /\.mpd(\?.*)?$/i.test(embedUrl);
+
+  useEffect(() => {
+    if (!videoRef.current || !hasEmbed || !isDirectVideo) {
+      return;
+    }
+
+    const videoElement = videoRef.current;
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+    if (dashRef.current) {
+      dashRef.current.reset();
+      dashRef.current = null;
+    }
+
+    if (isHlsSource) {
+      const canPlayNativeHls = videoElement.canPlayType('application/vnd.apple.mpegurl');
+      if (canPlayNativeHls) {
+        videoElement.src = embedUrl;
+      } else if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+        });
+        hls.loadSource(embedUrl);
+        hls.attachMedia(videoElement);
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data?.fatal) {
+            setGestureLabel('HLS playback error');
+          }
+        });
+        hlsRef.current = hls;
+      } else {
+        videoElement.src = embedUrl;
+      }
+    } else if (isDashSource) {
+      const player = dashjs.MediaPlayer().create();
+      player.initialize(videoElement, embedUrl, false);
+      player.updateSettings({
+        streaming: {
+          abr: {
+            autoSwitchBitrate: {
+              audio: true,
+              video: true,
+            },
+          },
+        },
+      });
+      dashRef.current = player;
+    } else {
+      videoElement.src = embedUrl;
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      if (dashRef.current) {
+        dashRef.current.reset();
+        dashRef.current = null;
+      }
+    };
+  }, [embedUrl, hasEmbed, isDashSource, isDirectVideo, isHlsSource]);
 
   useEffect(() => {
     let ignore = false;
@@ -306,6 +379,77 @@ export default function EmbeddedWatchPage() {
     setResumeSeconds(0);
   };
 
+  useEffect(() => {
+    const isTypingTarget = (target) => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+      const tagName = target.tagName;
+      return tagName === 'INPUT' || tagName === 'TEXTAREA' || target.isContentEditable;
+    };
+
+    const onKeyDown = (event) => {
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+
+      if (event.key === 'n' && isTvRoute) {
+        event.preventDefault();
+        goToNextEpisode();
+        return;
+      }
+
+      if (event.key === 'p' && isTvRoute) {
+        event.preventDefault();
+        goToPreviousEpisode();
+        return;
+      }
+
+      if (!isDirectVideo || !videoRef.current) {
+        return;
+      }
+
+      if (event.key === ' ' || event.key === 'k' || event.key === 'MediaPlayPause') {
+        event.preventDefault();
+        togglePlay();
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        seekBy(-10);
+        return;
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        seekBy(10);
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        const nextVolume = Math.min((videoRef.current.volume || 0) + 0.1, 1);
+        videoRef.current.volume = nextVolume;
+        setGestureLabel(`Volume ${Math.round(nextVolume * 100)}%`);
+        window.setTimeout(() => setGestureLabel(''), 600);
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        const nextVolume = Math.max((videoRef.current.volume || 0) - 0.1, 0);
+        videoRef.current.volume = nextVolume;
+        setGestureLabel(`Volume ${Math.round(nextVolume * 100)}%`);
+        window.setTimeout(() => setGestureLabel(''), 600);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isDirectVideo, isTvRoute, seekBy, togglePlay, goToNextEpisode, goToPreviousEpisode]);
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
       <div className="mb-4 text-sm text-stone-300">
@@ -319,6 +463,11 @@ export default function EmbeddedWatchPage() {
         <p className="mt-2 text-sm text-stone-300">
           Route: <span className="text-amber-200">/{isTvRoute ? `tv/${tmdbId}/${season}/${episode}` : `movie/${tmdbId}`}</span>
         </p>
+        {!isSecureEmbed && hasEmbed && (
+          <p className="mt-2 rounded border border-rose-700/60 bg-rose-950/50 px-3 py-2 text-xs text-rose-200">
+            Non-HTTPS stream URL detected. TV boxes and mobile browsers can block mixed or insecure playback.
+          </p>
+        )}
 
         {isTvRoute && (
           <div className="mt-4 rounded-lg border border-stone-700/70 bg-stone-950/70 p-3">
@@ -428,10 +577,10 @@ export default function EmbeddedWatchPage() {
                 >
                   <video
                     ref={videoRef}
-                    src={embedUrl}
                     className="h-full w-full"
                     controls={false}
                     playsInline
+                    preload="metadata"
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
                     onLoadedMetadata={onVideoLoadedMetadata}
@@ -504,6 +653,9 @@ export default function EmbeddedWatchPage() {
                 </div>
                 <p className="text-xs text-stone-300">
                   Mobile gestures: double-tap left/right to seek, swipe up/down right side for volume, left side for brightness.
+                </p>
+                <p className="text-xs text-stone-300">
+                  TV remote shortcuts: Space/K toggles play, left/right seeks 10s, up/down adjusts volume, N/P jumps episodes.
                 </p>
               </>
             ) : (
