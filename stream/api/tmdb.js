@@ -51,8 +51,8 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.TMDB_API_KEY;
-  const accessToken = process.env.TMDB_READ_ACCESS_TOKEN;
+  const apiKey = process.env.VITE_TMDB_API_KEY;
+  const accessToken = process.env.VITE_TMDB_READ_ACCESS_TOKEN;
   if (!apiKey || !accessToken) {
     res.status(500).json({ error: "TMDB credentials not set in environment" });
     return;
