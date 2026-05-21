@@ -1,20 +1,24 @@
 import { Link } from 'react-router-dom';
 import { PlayCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { formatRating, getMediaType, getPosterUrl, getReleaseYear, getTitleName } from '../../utils/media';
+import { Card } from './card';
 
 export default function MovieCard({ item }) {
   const mediaType = getMediaType(item);
   const posterUrl = getPosterUrl(item.poster_path);
 
   return (
-    <article className="movie-card group w-[180px] shrink-0 overflow-hidden rounded-xl border border-stone-700/70 bg-stone-900/90">
+    <Card hover className="movie-card group w-[180px] shrink-0 overflow-hidden bg-stone-900/90">
       <Link to={`/title/${mediaType}/${item.id}`} className="block">
         <div className="relative aspect-[2/3] overflow-hidden bg-stone-800">
           {posterUrl ? (
-            <img
+            <motion.img
               src={posterUrl}
               alt={`Poster for ${getTitleName(item)}`}
               loading="lazy"
+              whileHover={{ scale: 1.07 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             />
           ) : (
@@ -37,6 +41,6 @@ export default function MovieCard({ item }) {
           </div>
         </div>
       </Link>
-    </article>
+    </Card>
   );
 }

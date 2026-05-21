@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { PlayCircle } from 'lucide-react';
+import { CalendarDays, Clapperboard, Globe2, PlayCircle, Sparkles } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { getTitleDetails, getTitleVideos, getTvSeasonDetails, getWatchProviders } from '../services/tmdb';
 import { formatRating, getBackdropUrl, getPosterUrl } from '../utils/media';
 import { getSeriesProgress, saveSeriesEpisode } from '../utils/episodeProgress';
 import { saveWatchHistoryEntry } from '../utils/recommendations';
+import Button from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
 
 function formatRuntime(minutes) {
   if (!minutes) {
@@ -25,7 +28,7 @@ function ProviderList({ title, providers = [] }) {
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
+    <Card className="space-y-2 bg-stone-950/70 p-4">
       <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-amber-200">{title}</h3>
       <div className="flex flex-wrap gap-2">
         {providers.map((provider) => (
@@ -34,7 +37,7 @@ function ProviderList({ title, providers = [] }) {
           </span>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -106,6 +109,9 @@ export default function TitleDetailsPage() {
 
   const providerInfo = activeRegion ? providersByRegion[activeRegion] : null;
   const title = details?.title || details?.name;
+  const releaseYear = (details?.release_date || details?.first_air_date || '').slice(0, 4);
+  const languageCode = details?.original_language?.toUpperCase();
+  const runtimeLabel = details?.runtime ? formatRuntime(details.runtime) : null;
   const seasonOptions = useMemo(() => {
     if (mediaType !== 'tv') {
       return [];
@@ -189,7 +195,12 @@ export default function TitleDetailsPage() {
   }, [id, mediaType, selectedSeason]);
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+    <motion.main
+      className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
+    >
       <p className="mb-4 text-sm text-stone-300">
         <Link to="/" className="text-amber-300 underline decoration-amber-400 underline-offset-2">Discover</Link>
         {' / '}
@@ -201,7 +212,12 @@ export default function TitleDetailsPage() {
 
       {!loading && !error && details && (
         <>
-          <section className="relative overflow-hidden rounded-2xl border border-stone-700/70">
+          <motion.section
+            className="relative overflow-hidden rounded-2xl border border-stone-700/70 shadow-[0_20px_60px_rgba(0,0,0,0.35)]"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+          >
             {details.backdrop_path && (
               <img
                 src={getBackdropUrl(details.backdrop_path)}
@@ -209,8 +225,8 @@ export default function TitleDetailsPage() {
                 className="absolute inset-0 h-full w-full object-cover opacity-40"
               />
             )}
-            <div className="relative z-10 grid gap-4 bg-gradient-to-br from-black/90 via-black/70 to-black/75 p-5 sm:grid-cols-[220px_1fr] sm:p-7">
-              <div className="overflow-hidden rounded-xl border border-stone-700/70 bg-stone-800">
+            <div className="relative z-10 grid gap-5 bg-gradient-to-br from-black/88 via-black/68 to-black/74 p-5 sm:grid-cols-[240px_1fr] sm:p-7">
+              <div className="overflow-hidden rounded-xl border border-stone-700/70 bg-stone-800 shadow-[0_18px_36px_rgba(0,0,0,0.35)]">
                 {details.poster_path ? (
                   <img src={getPosterUrl(details.poster_path)} alt={`Poster for ${title}`} className="h-full w-full object-cover" />
                 ) : (
@@ -218,23 +234,45 @@ export default function TitleDetailsPage() {
                 )}
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{title}</h1>
-                  <p className="mt-2 text-sm text-stone-200">{details.overview || 'No overview available.'}</p>
+              <div className="space-y-5 min-w-0">
+                <div className="space-y-3">
+                  <p className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/45 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Premium Details
+                  </p>
+                  <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-[2.6rem]">{title}</h1>
+                  <p className="max-w-3xl text-sm leading-relaxed text-stone-200/95 sm:text-[15px]">{details.overview || 'No overview available.'}</p>
                 </div>
 
-                <div className="flex flex-wrap gap-2 text-xs text-stone-200">
-                  <span className="rounded-full border border-stone-500 bg-black/30 px-3 py-1">TMDB Rating: {formatRating(details.vote_average)}</span>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg border border-stone-600/75 bg-black/35 px-3 py-2 text-xs text-stone-200">
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-stone-400">Rating</p>
+                    <p className="mt-1 font-semibold text-amber-200">{formatRating(details.vote_average)}</p>
+                  </div>
+                  <div className="rounded-lg border border-stone-600/75 bg-black/35 px-3 py-2 text-xs text-stone-200">
+                    <p className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-stone-400"><CalendarDays className="h-3 w-3" /> Year</p>
+                    <p className="mt-1 font-semibold text-stone-100">{releaseYear || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border border-stone-600/75 bg-black/35 px-3 py-2 text-xs text-stone-200">
+                    <p className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-stone-400"><Clapperboard className="h-3 w-3" /> Runtime</p>
+                    <p className="mt-1 font-semibold text-stone-100">{runtimeLabel || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-lg border border-stone-600/75 bg-black/35 px-3 py-2 text-xs text-stone-200">
+                    <p className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.14em] text-stone-400"><Globe2 className="h-3 w-3" /> Language</p>
+                    <p className="mt-1 font-semibold text-stone-100">{languageCode || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 text-xs text-stone-200/95">
                   {(details.genres || []).slice(0, 4).map((genre) => (
-                    <span key={genre.id} className="rounded-full border border-stone-500 bg-black/30 px-3 py-1">{genre.name}</span>
+                    <span key={genre.id} className="rounded-full border border-stone-500/85 bg-black/35 px-3 py-1">{genre.name}</span>
                   ))}
                 </div>
 
                 {mediaType === 'tv' && (
-                  <div className="rounded-lg border border-amber-500/40 bg-amber-950/30 p-3">
+                  <div className="rounded-xl border border-amber-500/35 bg-gradient-to-br from-amber-950/28 via-stone-950/44 to-stone-950/50 p-3.5 backdrop-blur-sm">
                     <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-200">Episode Picker</p>
-                    <p className="mt-1 text-xs text-stone-300">Choose a season, then tap an episode card.</p>
+                    <p className="mt-1 text-xs text-stone-300">Choose season and episode below, then open player.</p>
 
                     {resumeEpisode && (
                       <div className="mt-2 rounded-md border border-emerald-500/40 bg-emerald-900/20 p-2 text-xs text-emerald-200">
@@ -246,21 +284,23 @@ export default function TitleDetailsPage() {
                       {seasonOptions.map((seasonItem) => {
                         const isActive = selectedSeason === seasonItem.season_number;
                         return (
-                          <button
+                          <Button
                             key={seasonItem.id || seasonItem.season_number}
                             type="button"
                             onClick={() => {
                               setSelectedSeason(seasonItem.season_number);
                               setSelectedEpisode(1);
                             }}
-                            className={`rounded-full border px-3 py-1 text-xs transition ${
+                            size="sm"
+                            variant={isActive ? 'default' : 'secondary'}
+                            className={`rounded-full ${
                               isActive
-                                ? 'border-amber-200 bg-amber-300 text-stone-900'
-                                : 'border-stone-500 bg-stone-900 text-stone-200 hover:bg-stone-800'
+                                ? 'border-amber-200'
+                                : 'border-stone-500 bg-stone-900 text-stone-200'
                             }`}
                           >
                             Season {seasonItem.season_number}
-                          </button>
+                          </Button>
                         );
                       })}
                     </div>
@@ -269,18 +309,21 @@ export default function TitleDetailsPage() {
                     {seasonError && <p className="mt-3 text-xs text-rose-300">{seasonError}</p>}
 
                     {!seasonLoading && !seasonError && !!episodes.length && (
-                      <div className="mt-3 overflow-x-auto rounded-lg border border-stone-700/60 bg-stone-950/40 p-2">
-                        <div className="flex gap-2 pb-1">
+                      <div className="mt-3 overflow-hidden rounded-lg border border-stone-700/60 bg-stone-950/40">
+                        <div className="overflow-x-auto overscroll-x-contain px-2 pb-2 pt-2">
+                        <div className="grid grid-flow-col auto-cols-[minmax(13.5rem,14.5rem)] gap-2 pb-1 sm:auto-cols-[minmax(14rem,15rem)]">
                           {episodes.map((episodeItem) => {
                             const isActiveEpisode = selectedEpisode === episodeItem.episode_number;
                             return (
-                              <button
+                              <motion.button
                                 key={episodeItem.id || `${selectedSeason}-${episodeItem.episode_number}`}
                                 type="button"
                                 onClick={() => setSelectedEpisode(episodeItem.episode_number)}
-                                className={`w-56 shrink-0 rounded-lg border p-2 text-left transition ${
+                                whileHover={{ y: -2, scale: 1.01 }}
+                                transition={{ duration: 0.2, ease: 'easeOut' }}
+                                className={`min-w-0 rounded-lg border p-2 text-left transition ${
                                   isActiveEpisode
-                                    ? 'border-amber-300 bg-amber-300/20'
+                                    ? 'border-amber-300 bg-amber-300/20 shadow-[0_0_0_1px_rgba(252,211,77,0.25)]'
                                     : 'border-stone-600 bg-stone-900/80 hover:bg-stone-800'
                                 }`}
                               >
@@ -300,22 +343,25 @@ export default function TitleDetailsPage() {
                                 {episodeItem.runtime ? (
                                   <p className="mt-1 text-[11px] text-amber-200">{formatRuntime(episodeItem.runtime)}</p>
                                 ) : null}
-                              </button>
+                              </motion.button>
                             );
                           })}
+                        </div>
                         </div>
                       </div>
                     )}
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 pt-1">
                   {resumeEpisode && mediaType === 'tv' && (
                     <Link
                       to={`/tv/${id}/${resumeEpisode.season}/${resumeEpisode.episode}`}
-                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-300 px-4 py-2 text-sm font-semibold text-stone-900 transition hover:bg-emerald-200"
+                      className="inline-flex"
                     >
-                      Resume S{resumeEpisode.season}:E{resumeEpisode.episode}
+                      <Button asChild variant="success" size="default" className="gap-2 font-semibold shadow-[0_0_0_2px_rgba(16,185,129,0.22)]">
+                        Resume S{resumeEpisode.season}:E{resumeEpisode.episode}
+                      </Button>
                     </Link>
                   )}
                   <Link
@@ -325,18 +371,27 @@ export default function TitleDetailsPage() {
                         saveSeriesEpisode(id, selectedSeason, selectedEpisode);
                       }
                     }}
-                    className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-300 px-5 py-2.5 text-sm font-semibold text-stone-900 shadow-[0_0_0_3px_rgba(252,211,77,0.2)] transition hover:bg-amber-200"
+                    className="inline-flex"
                   >
-                    Open In-Site Player
-                    <PlayCircle className="h-4 w-4" />
+                    <Button asChild size="lg" className="gap-2 shadow-[0_0_0_3px_rgba(252,211,77,0.2)]">
+                      Open In-Site Player
+                      <PlayCircle className="h-4 w-4" />
+                    </Button>
                   </Link>
                 </div>
               </div>
             </div>
-          </section>
+          </motion.section>
 
-          <section className="mt-6 grid gap-6 lg:grid-cols-[2fr_1fr]">
-            <div className="space-y-3 rounded-2xl border border-stone-700/70 bg-stone-900/80 p-4 sm:p-5">
+          <motion.section
+            className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]"
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.15 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+          >
+            <Card className="space-y-3 bg-gradient-to-br from-stone-900/90 to-stone-950/85">
+              <CardContent className="space-y-3 p-4 sm:p-5">
               <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-stone-100">
                 <PlayCircle className="h-5 w-5 text-amber-300" />
                 Official Trailer
@@ -358,9 +413,11 @@ export default function TitleDetailsPage() {
                   No official trailer was found for this title.
                 </p>
               )}
-            </div>
+              </CardContent>
+            </Card>
 
-            <aside className="space-y-3 rounded-2xl border border-stone-700/70 bg-stone-900/80 p-4 sm:p-5">
+            <Card className="space-y-3 bg-gradient-to-br from-stone-900/90 to-stone-950/85">
+              <CardContent className="space-y-3 p-4 sm:p-5">
               <h2 className="text-lg font-semibold text-stone-100">Watch Providers {activeRegion ? `(${activeRegion})` : ''}</h2>
 
               {providerInfo ? (
@@ -374,10 +431,11 @@ export default function TitleDetailsPage() {
                   Provider details are unavailable for this title in TMDB.
                 </p>
               )}
-            </aside>
-          </section>
+              </CardContent>
+            </Card>
+          </motion.section>
         </>
       )}
-    </main>
+    </motion.main>
   );
 }
