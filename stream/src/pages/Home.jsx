@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Star, Tv } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Suspense, lazy } from 'react';
 const MediaRow = lazy(() => import('../components/ui/MediaRow'));
 import { getPopularMovies, getPopularTv, getTrending } from '../services/tmdb';
 import { formatRating, getBackdropUrl, getMediaType, getReleaseYear, getTitleName } from '../utils/media';
 import { buildBecauseYouWatched, buildMoodSuggestions, loadWatchHistory, MOOD_PRESETS } from '../utils/recommendations';
+import Button from '../components/ui/button';
+import { Card, CardContent } from '../components/ui/card';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -80,8 +83,18 @@ export default function Home() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 pb-4 pt-6 sm:px-6 sm:pt-8">
-      <section className="hero-panel relative overflow-hidden rounded-2xl border border-stone-700/70 p-5 sm:p-8">
+    <motion.main
+      className="mx-auto w-full max-w-6xl px-4 pb-4 pt-6 sm:px-6 sm:pt-8"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.34, ease: 'easeOut' }}
+    >
+      <motion.section
+        className="hero-panel relative overflow-hidden rounded-2xl border border-stone-700/70 p-5 sm:p-8"
+        initial={{ opacity: 0.94, scale: 0.995 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.36, ease: 'easeOut' }}
+      >
         {featured?.backdrop_path && (
           <img
             src={getBackdropUrl(featured.backdrop_path)}
@@ -109,10 +122,10 @@ export default function Home() {
               placeholder="Search movies or shows..."
               className="w-full rounded-lg border border-stone-500/60 bg-black/45 px-4 py-3 text-sm text-stone-100 placeholder:text-stone-300 focus:border-amber-300 focus:outline-none"
             />
-            <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-300 px-5 py-3 text-sm font-semibold text-stone-900 transition hover:bg-amber-200">
+            <Button type="submit" size="lg" className="gap-2 rounded-lg">
               <Search className="h-4 w-4" />
               Search
-            </button>
+            </Button>
           </form>
 
           {featured && (
@@ -125,7 +138,7 @@ export default function Home() {
             </Link>
           )}
         </div>
-      </section>
+      </motion.section>
 
       <section className="mt-8 space-y-8">
         {loading && <p className="text-sm text-stone-300">Loading curated picks...</p>}
@@ -140,28 +153,28 @@ export default function Home() {
               />
             )}
 
-            <section className="space-y-3">
+            <Card className="space-y-3">
+              <CardContent className="space-y-3 p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-xl font-semibold tracking-tight text-stone-100">Mood-Based Suggestions</h2>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(MOOD_PRESETS).map(([key, mood]) => (
-                    <button
+                    <Button
                       key={key}
                       type="button"
                       onClick={() => setActiveMood(key)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                        activeMood === key
-                          ? 'bg-amber-300 text-stone-900'
-                          : 'border border-stone-600 text-stone-200 hover:bg-stone-800'
-                      }`}
+                      size="sm"
+                      variant={activeMood === key ? 'default' : 'secondary'}
+                      className="rounded-full"
                     >
                       {mood.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
               <MediaRow title={`Now: ${MOOD_PRESETS[activeMood].label}`} items={moodSuggestions} />
-            </section>
+              </CardContent>
+            </Card>
 
             <MediaRow title="Trending This Week" items={trending.slice(0, 18)} />
             <MediaRow title="Popular Movies" items={movies.slice(0, 18)} />
@@ -169,6 +182,6 @@ export default function Home() {
           </Suspense>
         )}
       </section>
-    </main>
+    </motion.main>
   );
 }

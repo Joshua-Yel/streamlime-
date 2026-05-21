@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, Maximize, Pause, PictureInPicture2, Play, RotateCcw, RotateCw } from 'lucide-react';
+import { AlertTriangle, Check, Maximize, Pause, PictureInPicture2, Play, RotateCcw, RotateCw, Server } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import Hls from 'hls.js';
 import dashjs from 'dashjs';
 import { getTvSeasonDetails } from '../services/tmdb';
@@ -44,17 +45,100 @@ export default function EmbeddedWatchPage() {
   const [autoplayEnabled, setAutoplayEnabled] = useState(true);
   const [nextCountdown, setNextCountdown] = useState(0);
   const [resumeSeconds, setResumeSeconds] = useState(0);
+  const [showSourceMenu, setShowSourceMenu] = useState(false);
+  const sourceButtonRef = useRef(null);
+  const sourceMenuRef = useRef(null);
 
   const lastSavedSecondRef = useRef(-1);
 
   const movieTemplate = import.meta.env.VITE_LEGAL_PLAYER_URL_TEMPLATE_MOVIE || '';
   const tvTemplate = import.meta.env.VITE_LEGAL_PLAYER_URL_TEMPLATE_TV || '';
 
+  const providerSources = useMemo(() => {
+    const list = [
+      {
+        id: 'videasy',
+        label: 'Videasy',
+        movieUrl: () => `https://player.videasy.net/movie/${tmdbId}`,
+        tvUrl: () => `https://player.videasy.net/tv/${tmdbId}/${season || 1}/${episode || 1}`,
+      },
+    ];
+
+    if (movieTemplate && tvTemplate) {
+      list.unshift({
+        id: 'custom',
+        label: 'Custom',
+        movieUrl: () => fillTemplate(movieTemplate, { tmdbId }),
+        tvUrl: () => fillTemplate(tvTemplate, { tmdbId, season, episode }),
+      });
+    }
+
+    return list;
+  }, [episode, movieTemplate, season, tmdbId, tvTemplate]);
+
+  const [playerSource, setPlayerSource] = useState(() => {
+    try {
+      const fromQuery = new URLSearchParams(window.location.search).get('source');
+      return fromQuery || 'videasy';
+    } catch {
+      return 'videasy';
+    }
+  });
+
   const embedUrl = useMemo(() => {
-    return isTvRoute
-      ? fillTemplate(tvTemplate, { tmdbId, season, episode })
-      : fillTemplate(movieTemplate, { tmdbId });
-  }, [episode, isTvRoute, movieTemplate, season, tmdbId, tvTemplate]);
+    const selected = providerSources.find((source) => source.id === playerSource) || providerSources[0];
+    if (!selected) {
+      return '';
+    }
+
+    return isTvRoute ? selected.tvUrl() : selected.movieUrl();
+  }, [isTvRoute, playerSource, providerSources]);
+
+  useEffect(() => {
+    if (!providerSources.some((source) => source.id === playerSource)) {
+      setPlayerSource(providerSources[0]?.id || 'videasy');
+    }
+  }, [playerSource, providerSources]);
+
+  useEffect(() => {
+    const selected = providerSources.find((source) => source.id === playerSource);
+    if (!selected) {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('source') !== selected.id) {
+      url.searchParams.set('source', selected.id);
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+    }
+  }, [playerSource, providerSources]);
+
+  useEffect(() => {
+    if (!showSourceMenu) {
+      return;
+    }
+
+    const onPointerDown = (event) => {
+      const target = event.target;
+      if (sourceButtonRef.current?.contains(target) || sourceMenuRef.current?.contains(target)) {
+        return;
+      }
+      setShowSourceMenu(false);
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowSourceMenu(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showSourceMenu]);
 
   const hasEmbed = embedUrl.startsWith('https://') || embedUrl.startsWith('http://');
   const isSecureEmbed = embedUrl.startsWith('https://');
@@ -450,19 +534,96 @@ export default function EmbeddedWatchPage() {
     };
   }, [isDirectVideo, isTvRoute, seekBy, togglePlay, goToNextEpisode, goToPreviousEpisode]);
 
+  const compactControlClass = 'inline-flex h-9 items-center gap-1.5 rounded-md border border-stone-600/80 bg-stone-900/80 px-3 text-xs font-medium text-stone-100 transition hover:border-amber-300/70 hover:bg-stone-800';
+  const compactControlPrimaryClass = 'inline-flex h-9 items-center gap-1.5 rounded-md bg-amber-300 px-3 text-xs font-semibold text-stone-900 transition hover:bg-amber-200';
+  const compactIconClass = 'h-3.5 w-3.5';
+
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+    <motion.main
+      className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, ease: 'easeOut' }}
+    >
       <div className="mb-4 text-sm text-stone-300">
         <Link to="/" className="text-amber-300 underline decoration-amber-400 underline-offset-2">Discover</Link>
         {' / '}
         <span className="text-stone-200">In-site player</span>
       </div>
 
-      <section className="rounded-2xl border border-stone-700/70 bg-stone-900/80 p-4 sm:p-6">
-        <h1 className="text-2xl font-semibold text-stone-100">Streamline Embedded Player</h1>
-        <p className="mt-2 text-sm text-stone-300">
-          Route: <span className="text-amber-200">/{isTvRoute ? `tv/${tmdbId}/${season}/${episode}` : `movie/${tmdbId}`}</span>
-        </p>
+      <motion.section
+        className="rounded-2xl border border-stone-700/70 bg-gradient-to-br from-stone-900/95 via-stone-900/85 to-stone-950/90 p-4 sm:p-6"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-stone-100">Streamline Embedded Player</h1>
+            <p className="mt-2 text-sm text-stone-300">
+              Route: <span className="rounded-md border border-stone-600/70 bg-stone-950/70 px-2 py-1 text-amber-200">/{isTvRoute ? `tv/${tmdbId}/${season}/${episode}` : `movie/${tmdbId}`}</span>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-xl border border-stone-700/70 bg-stone-950/70 p-2">
+            <div className="relative">
+              <button
+                ref={sourceButtonRef}
+                type="button"
+                onClick={() => setShowSourceMenu((prev) => !prev)}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-stone-100 transition ${
+                  showSourceMenu
+                    ? 'border-amber-300 bg-amber-300/20'
+                    : 'border-stone-600 bg-stone-900 hover:bg-stone-800'
+                }`}
+                title={`Streaming source: ${providerSources.find((source) => source.id === playerSource)?.label || 'Unknown'}`}
+                aria-label="Open source options"
+              >
+                <Server className="h-4 w-4" />
+              </button>
+              <AnimatePresence>
+                {showSourceMenu && (
+                  <motion.div
+                    ref={sourceMenuRef}
+                    className="absolute right-0 top-10 z-30 min-w-[13rem] rounded-lg border border-stone-700 bg-stone-950/95 p-1.5 shadow-xl"
+                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                  >
+                    {providerSources.map((source) => {
+                      const active = source.id === playerSource;
+                      return (
+                        <motion.button
+                          key={source.id}
+                          type="button"
+                          whileHover={{ x: 2 }}
+                          transition={{ duration: 0.16 }}
+                          onClick={() => {
+                            setPlayerSource(source.id);
+                            setShowSourceMenu(false);
+                          }}
+                          className={`mb-1 flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition ${
+                            active
+                              ? 'bg-amber-300/20 text-amber-100'
+                              : 'text-stone-200 hover:bg-stone-800'
+                          }`}
+                        >
+                          <span>{source.label}</span>
+                          {active && <Check className="h-4 w-4 text-amber-300" />}
+                        </motion.button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            <p className="text-xs text-stone-300">
+              Source: <span className="font-semibold text-stone-100">{providerSources.find((source) => source.id === playerSource)?.label || 'Unknown'}</span>
+            </p>
+          </div>
+        </div>
+
         {!isSecureEmbed && hasEmbed && (
           <p className="mt-2 rounded border border-rose-700/60 bg-rose-950/50 px-3 py-2 text-xs text-rose-200">
             Non-HTTPS stream URL detected. TV boxes and mobile browsers can block mixed or insecure playback.
@@ -470,7 +631,7 @@ export default function EmbeddedWatchPage() {
         )}
 
         {isTvRoute && (
-          <div className="mt-4 rounded-lg border border-stone-700/70 bg-stone-950/70 p-3">
+          <div className="mt-4 rounded-xl border border-stone-700/70 bg-stone-950/70 p-3">
             <div className="flex flex-wrap items-end gap-3">
               <label className="text-xs text-stone-300">
                 Season
@@ -479,7 +640,7 @@ export default function EmbeddedWatchPage() {
                   min="1"
                   value={seasonNumber}
                   onChange={(event) => goToTvEpisode(Number(event.target.value || 1), episodeNumber)}
-                  className="mt-1 w-24 rounded-md border border-stone-600 bg-stone-900 px-2 py-1.5 text-sm text-stone-100"
+                  className="mt-1 h-9 w-24 rounded-md border border-stone-600 bg-stone-900 px-2 text-sm text-stone-100"
                 />
               </label>
 
@@ -491,7 +652,7 @@ export default function EmbeddedWatchPage() {
                   max={maxEpisodes || undefined}
                   value={episodeNumber}
                   onChange={(event) => goToTvEpisode(seasonNumber, Number(event.target.value || 1))}
-                  className="mt-1 w-24 rounded-md border border-stone-600 bg-stone-900 px-2 py-1.5 text-sm text-stone-100"
+                  className="mt-1 h-9 w-24 rounded-md border border-stone-600 bg-stone-900 px-2 text-sm text-stone-100"
                 />
               </label>
 
@@ -499,23 +660,25 @@ export default function EmbeddedWatchPage() {
                 type="button"
                 onClick={goToPreviousEpisode}
                 disabled={episodeNumber <= 1}
-                className="rounded-md border border-stone-600 px-3 py-2 text-sm text-stone-100 hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`${compactControlClass} disabled:cursor-not-allowed disabled:opacity-50`}
               >
+                <RotateCcw className={compactIconClass} />
                 Previous Episode
               </button>
 
               <button
                 type="button"
                 onClick={goToNextEpisode}
-                className="rounded-md bg-amber-300 px-3 py-2 text-sm font-semibold text-stone-900 hover:bg-amber-200"
+                className={compactControlPrimaryClass}
               >
+                <RotateCw className={compactIconClass} />
                 Next Episode
               </button>
 
               <button
                 type="button"
                 onClick={() => setAutoplayEnabled((prev) => !prev)}
-                className={`rounded-md border px-3 py-2 text-sm ${
+                className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium ${
                   autoplayEnabled
                     ? 'border-emerald-400 bg-emerald-950/40 text-emerald-200'
                     : 'border-stone-600 text-stone-200 hover:bg-stone-800'
@@ -564,15 +727,18 @@ export default function EmbeddedWatchPage() {
         )}
 
         {hasEmbed ? (
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-4">
             {isDirectVideo ? (
               <>
-                <div
+                <motion.div
                   className="relative aspect-video overflow-hidden rounded-xl border border-stone-700/80 bg-black"
                   onDoubleClick={onDoubleTap}
                   onTouchStart={onTouchStart}
                   onTouchMove={onTouchMove}
                   onTouchEnd={onTouchEnd}
+                  initial={{ opacity: 0.92, scale: 0.995 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
                   style={{ filter: `brightness(${brightness})` }}
                 >
                   <video
@@ -608,59 +774,66 @@ export default function EmbeddedWatchPage() {
                       Next episode in {nextCountdown}s
                     </div>
                   )}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+                </motion.div>
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                   <button
                     type="button"
                     onClick={togglePlay}
-                    className="inline-flex items-center gap-2 rounded-md bg-amber-300 px-3 py-2 text-sm font-semibold text-stone-900 hover:bg-amber-200"
+                    className={compactControlPrimaryClass}
                   >
-                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    {isPlaying ? <Pause className={compactIconClass} /> : <Play className={compactIconClass} />}
                     {isPlaying ? 'Pause' : 'Play'}
                   </button>
                   <button
                     type="button"
                     onClick={() => seekBy(-10)}
-                    className="inline-flex items-center gap-2 rounded-md border border-stone-600 px-3 py-2 text-sm text-stone-100 hover:bg-stone-800"
+                    className={compactControlClass}
                   >
-                    <RotateCcw className="h-4 w-4" />
+                    <RotateCcw className={compactIconClass} />
                     -10s
                   </button>
                   <button
                     type="button"
                     onClick={() => seekBy(10)}
-                    className="inline-flex items-center gap-2 rounded-md border border-stone-600 px-3 py-2 text-sm text-stone-100 hover:bg-stone-800"
+                    className={compactControlClass}
                   >
-                    <RotateCw className="h-4 w-4" />
+                    <RotateCw className={compactIconClass} />
                     +10s
                   </button>
                   <button
                     type="button"
                     onClick={togglePip}
-                    className="inline-flex items-center gap-2 rounded-md border border-stone-600 px-3 py-2 text-sm text-stone-100 hover:bg-stone-800"
+                    className={compactControlClass}
                   >
-                    <PictureInPicture2 className="h-4 w-4" />
+                    <PictureInPicture2 className={compactIconClass} />
                     {isPipActive ? 'Exit PiP' : 'PiP'}
                   </button>
                   <button
                     type="button"
                     onClick={lockLandscape}
-                    className="inline-flex items-center gap-2 rounded-md border border-stone-600 px-3 py-2 text-sm text-stone-100 hover:bg-stone-800"
+                    className={compactControlClass}
                   >
-                    <Maximize className="h-4 w-4" />
+                    <Maximize className={compactIconClass} />
                     Lock Landscape
                   </button>
                 </div>
-                <p className="text-xs text-stone-300">
-                  Mobile gestures: double-tap left/right to seek, swipe up/down right side for volume, left side for brightness.
-                </p>
-                <p className="text-xs text-stone-300">
-                  TV remote shortcuts: Space/K toggles play, left/right seeks 10s, up/down adjusts volume, N/P jumps episodes.
-                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <p className="rounded-lg border border-stone-700/70 bg-stone-950/60 px-3 py-2 text-[11px] text-stone-300">
+                    Mobile gestures: double-tap left/right to seek, swipe right side for volume, left side for brightness.
+                  </p>
+                  <p className="rounded-lg border border-stone-700/70 bg-stone-950/60 px-3 py-2 text-[11px] text-stone-300">
+                    Remote shortcuts: Space/K play pause, arrows seek and volume, N/P episode jump.
+                  </p>
+                </div>
               </>
             ) : (
               <>
-                <div className="aspect-video overflow-hidden rounded-xl border border-stone-700/80 bg-black">
+                <motion.div
+                  className="aspect-video overflow-hidden rounded-xl border border-stone-700/80 bg-black shadow-[0_12px_30px_rgba(0,0,0,0.35)]"
+                  initial={{ opacity: 0.92, scale: 0.995 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
+                >
                   <iframe
                     src={embedUrl}
                     title="Streamline embedded player"
@@ -669,13 +842,13 @@ export default function EmbeddedWatchPage() {
                     allowFullScreen
                     className="h-full w-full"
                   />
-                </div>
-                <p className="text-xs text-stone-300">
+                </motion.div>
+                <p className="rounded-lg border border-stone-700/70 bg-stone-950/60 px-3 py-2 text-[11px] text-stone-300">
                   Streaming source is active.
                 </p>
               </>
             )}
-            <div className="rounded border border-amber-700/60 bg-amber-950/40 p-3 text-xs text-amber-200">
+            <div className="rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-xs text-amber-200">
               Source note: This player is loaded from an external streaming source. Availability and playback can vary by provider.
             </div>
           </div>
@@ -695,7 +868,7 @@ export default function EmbeddedWatchPage() {
             <p className="mt-2 text-xs">Tip: connect any provider format you want and keep the same route structure.</p>
           </div>
         )}
-      </section>
-    </main>
+      </motion.section>
+    </motion.main>
   );
 }

@@ -14,6 +14,7 @@ export default function SearchPage() {
 
   useEffect(() => {
     let ignore = false;
+    const controller = new AbortController();
 
     async function runSearch() {
       if (!q.trim()) {
@@ -24,11 +25,14 @@ export default function SearchPage() {
       try {
         setLoading(true);
         setError('');
-        const items = await searchTitles(q);
+        const items = await searchTitles(q, { signal: controller.signal });
         if (!ignore) {
           setResults(items);
         }
       } catch (err) {
+        if (err?.name === 'CanceledError' || err?.name === 'AbortError') {
+          return;
+        }
         if (!ignore) {
           setError('Search request failed. Please try again.');
         }
@@ -43,6 +47,7 @@ export default function SearchPage() {
 
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, [q]);
 
