@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Star, Tv } from 'lucide-react';
-import MediaRow from '../components/ui/MediaRow';
+import { Suspense, lazy } from 'react';
+const MediaRow = lazy(() => import('../components/ui/MediaRow'));
 import { getPopularMovies, getPopularTv, getTrending } from '../services/tmdb';
 import { formatRating, getBackdropUrl, getMediaType, getReleaseYear, getTitleName } from '../utils/media';
 import { buildBecauseYouWatched, buildMoodSuggestions, loadWatchHistory, MOOD_PRESETS } from '../utils/recommendations';
@@ -131,7 +132,7 @@ export default function Home() {
         {error && <p className="rounded-lg border border-rose-700/60 bg-rose-950/50 p-3 text-sm text-rose-200">{error}</p>}
 
         {!loading && !error && (
-          <>
+          <Suspense fallback={<div className="text-stone-300">Loading sections…</div>}>
             {!!becauseYouWatched.length && (
               <MediaRow
                 title={lastWatchedTitle ? `Because you watched ${lastWatchedTitle}` : 'Because you watched'}
@@ -165,7 +166,7 @@ export default function Home() {
             <MediaRow title="Trending This Week" items={trending.slice(0, 18)} />
             <MediaRow title="Popular Movies" items={movies.slice(0, 18)} />
             <MediaRow title="Popular Series" items={series.slice(0, 18)} />
-          </>
+          </Suspense>
         )}
       </section>
     </main>

@@ -1,9 +1,10 @@
 import { Link, NavLink, Route, Routes } from 'react-router-dom';
-import { Film, Search, Tv } from 'lucide-react';
+import { Film, Search, Tv, Filter } from 'lucide-react';
 import Home from './pages/Home';
 import SearchPage from './pages/SearchPage';
 import TitleDetailsPage from './pages/TitleDetailsPage';
 import EmbeddedWatchPage from './pages/EmbeddedWatchPage';
+import BrowsePage from './pages/BrowsePage';
 import { APP_NAME, APP_URL, HAS_TMDB_AUTH } from './constants';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           </Link>
           <nav className="flex items-center gap-2 text-sm">
             <AppNavLink to="/" label="Discover" icon={<Tv className="h-4 w-4" />} />
+            <AppNavLink to="/browse" label="Browse" icon={<Filter className="h-4 w-4" />} />
             <AppNavLink to="/search" label="Search" icon={<Search className="h-4 w-4" />} />
           </nav>
         </div>
@@ -31,6 +33,7 @@ function App() {
 
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/browse" element={<BrowsePage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/title/:mediaType/:id" element={<TitleDetailsPage />} />
         <Route path="/movie/:tmdbId" element={<EmbeddedWatchPage />} />
