@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const isDev = !process.env.ELECTRON_DIST;
+
 const securityHeaders = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "SAMEORIGIN",
@@ -25,19 +27,19 @@ export default defineConfig({
   },
   server: {
     host: "localhost",
-    port: 3000,
+    port: 5173,
     strictPort: false,
     open: false,
     headers: securityHeaders,
   },
   preview: {
     host: "localhost",
-    port: 3000,
+    port: 5173,
     strictPort: false,
     headers: securityHeaders,
   },
   build: {
-    outDir: "dist",
+    outDir: isDev ? "dist" : "dist",
     sourcemap: false,
     minify: "terser",
   },
