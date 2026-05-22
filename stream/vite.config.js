@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,7 +17,40 @@ const securityHeaders = {
 };
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["images/*", "icons/*"],
+      manifest: {
+        name: "Streamline",
+        short_name: "Streamline",
+        description: "Streamline legal discovery and playback portal",
+        theme_color: "#0f172a",
+        background_color: "#0f172a",
+        display: "standalone",
+        scope: "/",
+        start_url: "/",
+        icons: [
+          {
+            src: "/icons/icon-192.svg",
+            sizes: "192x192",
+            type: "image/svg+xml",
+            purpose: "any maskable",
+          },
+          {
+            src: "/icons/icon-512.svg",
+            sizes: "512x512",
+            type: "image/svg+xml",
+            purpose: "any maskable",
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,json}"],
+      },
+    }),
+  ],
   resolve: {
     // Force one React module graph to avoid duplicate hook contexts during HMR/prebundle.
     alias: {
