@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
-import { Film, Search, Tv, Filter } from 'lucide-react';
+import { Film, Search, Tv, Filter, Smartphone } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Home from './pages/Home';
 import SearchPage from './pages/SearchPage';
@@ -12,6 +13,45 @@ import { Card, CardContent } from './components/ui/card';
 
 function App() {
   const location = useLocation();
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (isStandalone) {
+      setIsInstalled(true);
+    }
+
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setDeferredPrompt(event);
+    };
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  async function handleMobileInstall() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+      return;
+    }
+
+    window.open(APP_URL, '_blank', 'noopener,noreferrer');
+  }
 
   return (
     <div className="app-shell min-h-screen text-stone-100">
@@ -51,17 +91,61 @@ function App() {
 
       <footer className="mx-auto mt-14 w-full max-w-6xl px-4 pb-8 pt-6 text-xs text-stone-300 sm:px-6">
         <Card>
-        <CardContent className="p-4">
-          <p>
-            Streamline helps you discover titles fast, browse trailers, and open playback options with a clean viewing flow.
-          </p>
-          <p className="mt-2">
-            Powered by TMDB data and artwork. Availability can vary by region and provider.
-          </p>
-          <p className="mt-2">
-            Application URL: <a className="underline decoration-amber-400 underline-offset-2" href={APP_URL}>{APP_URL}</a>
-          </p>
-        </CardContent>
+       <CardContent className="p-5">
+  <div className="grid gap-8 md:grid-cols-[1fr_auto] md:items-center">
+    {/* Left Content */}
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <h3 className="text-lg font-semibold tracking-tight text-white">
+          Built for effortless streaming discovery
+        </h3>
+
+        <p className="leading-relaxed text-stone-300">
+          Streamline helps you quickly discover movies and shows, watch trailers,
+          and jump into playback with a smooth, distraction-free experience.
+        </p>
+
+        <p className="text-sm leading-relaxed text-stone-400">
+          Powered by TMDB metadata and artwork. Content availability may vary
+          depending on your region and provider.
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 text-sm text-stone-500">
+        <span className="text-stone-400">Application URL</span>
+        <span className="text-stone-600">•</span>
+
+        <a
+          href={APP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="transition-colors hover:text-amber-300 hover:underline underline-offset-4"
+        >
+          {APP_URL}
+        </a>
+      </div>
+    </div>
+
+    {/* Right Actions */}
+    <div className="flex flex-col items-start gap-3">
+      <button
+        type="button"
+        onClick={handleMobileInstall}
+        disabled={isInstalled}
+        className="group inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 py-3 font-medium text-stone-900 transition-all duration-200 hover:bg-amber-300 hover:shadow-[0_0_30px_rgba(251,191,36,0.25)] active:scale-95"
+      >
+        <Smartphone className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" />
+        {isInstalled ? 'Installed on Mobile' : deferredPrompt ? 'Install PWA on Mobile' : 'Open on Mobile to Install'}
+      </button>
+
+      <p className="text-xs text-stone-500">
+        {deferredPrompt
+          ? 'Tap to install the Streamline PWA directly.'
+          : 'If install is not available here, open this site on your phone and tap Add to Home Screen.'}
+      </p>
+    </div>
+  </div>
+</CardContent>
         </Card>
       </footer>
     </div>
