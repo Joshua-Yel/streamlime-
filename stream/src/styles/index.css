@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --bg-900: #111111;
-  --bg-800: #1a1a1a;
-  --fg-100: #f7f6f3;
-  --accent-300: #f4ca6c;
-  --accent-200: #ffe3a1;
+  --bg-950: #0c0a09;
+  --bg-900: #12100e;
+  --fg-100: #f5f5f4;
+  --accent: #fbbf24;
+  color-scheme: dark;
 }
 
 * {
@@ -22,12 +22,22 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
   line-height: 1.5;
   color: var(--fg-100);
-  background: radial-gradient(1000px 600px at 88% -10%, #493317 0%, transparent 55%),
-    radial-gradient(900px 700px at -8% 15%, #223042 0%, transparent 55%),
-    linear-gradient(170deg, var(--bg-900), #090909 60%);
+  background:
+    radial-gradient(900px 480px at 100% -5%, rgba(120, 80, 20, 0.18), transparent 55%),
+    radial-gradient(700px 420px at -5% 0%, rgba(40, 55, 75, 0.16), transparent 50%),
+    linear-gradient(180deg, #12100e 0%, #0a0908 100%);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -36,58 +46,80 @@ a {
   color: inherit;
 }
 
+img {
+  max-width: 100%;
+}
+
 .app-shell {
   position: relative;
 }
 
-.app-shell::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image: linear-gradient(transparent 95%, rgba(255, 255, 255, 0.03) 95%),
-    linear-gradient(90deg, transparent 95%, rgba(255, 255, 255, 0.03) 95%);
-  background-size: 28px 28px;
-  opacity: 0.35;
-  z-index: -1;
+.app-shell.is-watch {
+  background: #0a0908;
 }
 
 .hero-panel {
-  background: linear-gradient(128deg, rgba(0, 0, 0, 0.88), rgba(20, 20, 20, 0.72));
+  background: #0c0a09;
 }
 
 .movie-card {
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
-.movie-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(244, 202, 108, 0.75);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+.movie-card:hover,
+.movie-card:focus-within {
+  border-color: rgba(251, 191, 36, 0.45);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  transform: translateY(-2px);
 }
 
 .scroll-row {
   scrollbar-width: thin;
-  scrollbar-color: rgba(244, 202, 108, 0.45) rgba(255, 255, 255, 0.08);
+  scrollbar-color: rgba(251, 191, 36, 0.4) rgba(255, 255, 255, 0.06);
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-row > * {
+  scroll-snap-align: start;
 }
 
 .scroll-row::-webkit-scrollbar {
-  height: 10px;
+  height: 8px;
 }
 
 .scroll-row::-webkit-scrollbar-thumb {
-  background: linear-gradient(90deg, rgba(244, 202, 108, 0.8), rgba(255, 228, 164, 0.7));
+  background: rgba(251, 191, 36, 0.45);
   border-radius: 999px;
 }
 
 .scroll-row::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 999px;
 }
 
-@media (max-width: 640px) {
-  .movie-card {
-    width: 44vw;
-    max-width: 180px;
+/* Prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
+
+  .movie-card:hover,
+  .movie-card:focus-within {
+    transform: none;
+  }
+}
+
+/* Focus visible defaults for interactive elements without custom rings */
+:focus-visible {
+  outline: 2px solid rgba(251, 191, 36, 0.7);
+  outline-offset: 2px;
 }

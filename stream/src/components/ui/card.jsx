@@ -1,15 +1,15 @@
-import { motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
 
-export function Card({ className, children, hover = false }) {
+export function Card({ className, children }) {
   return (
-    <motion.div
-      whileHover={hover ? { y: -4, scale: 1.01 } : undefined}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
-      className={cn('rounded-xl border border-stone-700/70 bg-stone-900/80', className)}
+    <div
+      className={cn(
+        'rounded-xl border border-stone-800 bg-stone-950/70',
+        className,
+      )}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 

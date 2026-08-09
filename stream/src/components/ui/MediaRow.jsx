@@ -1,49 +1,31 @@
 import MovieCard from './MovieCard';
-import { motion } from 'framer-motion';
+import { cn } from '../../lib/utils';
 
-export default function MediaRow({ title, items }) {
+export default function MediaRow({ title, items, className, action }) {
   return (
-    <motion.section
-      className="space-y-3"
-      initial={{ opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.2 }}
-      transition={{ duration: 0.35, ease: 'easeOut' }}
-    >
-      <h2 className="text-xl font-semibold tracking-tight text-stone-100">{title}</h2>
+    <section className={cn('space-y-3', className)}>
+      <div className="flex items-end justify-between gap-3">
+        <h2 className="text-lg font-semibold tracking-tight text-stone-100 sm:text-xl">
+          {title}
+        </h2>
+        {action}
+      </div>
+
       {items?.length ? (
-        <motion.div
-          className="scroll-row flex gap-3 overflow-x-auto pb-2"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.1 }}
-          variants={{
-            hidden: {},
-            visible: {
-              transition: {
-                staggerChildren: 0.03,
-              },
-            },
-          }}
-        >
+        <div className="scroll-row -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
           {items.map((item) => (
-            <motion.div
-              key={`${item.media_type || 'title'}-${item.id}`}
-              variants={{
-                hidden: { opacity: 0, y: 8 },
-                visible: { opacity: 1, y: 0 },
-              }}
-              transition={{ duration: 0.25 }}
-            >
-              <MovieCard item={item} />
-            </motion.div>
+            <MovieCard
+              item={item}
+              variant="row"
+              key={`${item.media_type || item.mediaType || 'title'}-${item.id}`}
+            />
           ))}
-        </motion.div>
+        </div>
       ) : (
-        <div className="rounded-lg border border-stone-700/60 bg-stone-900/70 p-4 text-center text-stone-300">
-          Coming soon
+        <div className="rounded-lg border border-dashed border-stone-700/80 bg-stone-900/40 px-4 py-8 text-center text-sm text-stone-400">
+          Nothing here yet.
         </div>
       )}
-    </motion.section>
+    </section>
   );
 }
