@@ -1,288 +1,253 @@
+/**
+ * Local persistence for watch history, favorites, and watchlist (My List).
+ * All data lives in localStorage under streamline.* keys.
+ */
+
 const WATCH_HISTORY_KEY = "streamline.watchHistory";
 const FAVORITES_KEY = "streamline.favorites";
-const WATCHLIST_KEY = "streamline.watchlist";
+const WATCHLIST_KEY = "streamline.myList"; // same key as watchlist.js — unified
 
-const LIMITS = {
-  watchHistory: 50,
-  favorites: 80,
-  watchlist: 100,
-  recommendations: 18,
-  continueWatchingDefault: 8,
-};
+const MAX_HISTORY = 120;
+const MAX_FAVORITES = 100;
+const MAX_WATCHLIST = 80;
 
-export const GENRE_IDS = {
-  ACTION: 28,
-  ADVENTURE: 12,
-  ANIMATION: 16,
-  COMEDY: 35,
-  CRIME: 80,
-  DOCUMENTARY: 99,
-  DRAMA: 18,
-  FAMILY: 10751,
-  FANTASY: 14,
-  HISTORY: 36,
-  HORROR: 27,
-  MUSIC: 10402,
-  MYSTERY: 9648,
-  ROMANCE: 10749,
-  SCI_FI: 878,
-  TV_MOVIE: 10770,
-  THRILLER: 53,
-  WAR: 10752,
-  WESTERN: 37,
-  ACTION_ADVENTURE_TV: 10759,
-  KIDS_TV: 10762,
-  NEWS_TV: 10763,
-  REALITY_TV: 10764,
-  SCI_FI_FANTASY_TV: 10765,
-  SOAP_TV: 10766,
-  TALK_TV: 10767,
-  WAR_POLITICS_TV: 10768,
-};
+/* ---------- helpers ---------- */
 
-export const GENRE_NAMES = Object.fromEntries(
-  Object.entries(GENRE_IDS).map(([key, id]) => [
-    id,
-    key
-      .replace(/_TV$/, "")
-      .split("_")
-      .map((word) => word[0] + word.slice(1).toLowerCase())
-      .join(" "),
-  ]),
-);
+function safeParse(raw, fallback) {
+  try {
+    const parsed = raw ? JSON.parse(raw) : fallback;
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
 
-const G = GENRE_IDS;
+function readArray(key) {
+  return safeParse(localStorage.getItem(key), []);
+}
 
-export const MOOD_PRESETS = {
-  chill: {
-    label: "Chill Night",
-    genres: [G.COMEDY, G.FAMILY, G.ROMANCE],
-    description: "Comedy, family, and romance",
-  },
-  thrill: {
-    label: "Adrenaline",
-    genres: [G.ACTION, G.THRILLER, G.CRIME],
-    description: "Action, thriller, crime",
-  },
-  dark: {
-    label: "Dark Vibes",
-    genres: [G.HORROR, G.MYSTERY],
-    description: "Horror and mystery",
-  },
-  mind: {
-    label: "Mind Bender",
-    genres: [G.SCI_FI, G.MYSTERY, G.DRAMA],
-    description: "Sci-fi, mystery, drama",
-  },
-  feelgood: {
-    label: "Feel Good",
-    genres: [G.COMEDY, G.FAMILY, G.ANIMATION, G.FANTASY],
-    description: "Comedy, family, animation, fantasy",
-  },
-};
+function writeArray(key, list) {
+  try {
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function sameItem(a, b) {
+  return Number(a.id) === Number(b.id) && a.mediaType === b.mediaType;
+}
+
+function normalizeEntry(entry) {
+  return {
+    id: Number(entry.id),
+    mediaType: entry.mediaType === "tv" ? "tv" : "movie",
+    title: entry.title || entry.name || "Untitled",
+    poster_path: entry.poster_path || null,
+    backdrop_path: entry.backdrop_path || null,
+    vote_average: Number(entry.vote_average) || 0,
+    release_date: entry.release_date || entry.first_air_date || null,
+    first_air_date: entry.first_air_date || null,
+    genre_ids: Array.isArray(entry.genre_ids) ? entry.genre_ids : [],
+  };
+}
+
+/* ---------- Watch history ---------- */
 
 export function loadWatchHistory() {
-  try {
-    const raw = localStorage.getItem(WATCH_HISTORY_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const list = readArray(WATCH_HISTORY_KEY);
+  return Array.isArray(list) ? list : [];
 }
 
 export function saveWatchHistoryEntry(entry) {
-  const current = loadWatchHistory();
-  const filtered = current.filter(
-    (item) => !(item.id === entry.id && item.mediaType === entry.mediaType),
+  if (!entry?.id || !entry?.mediaType) return loadWatchHistory();
+
+  const normalized = {
+    ...normalizeEntry(entry),
+    watchedAt: entry.watchedAt || Date.now(),
+    watchHour:
+      typeof entry.watchHour === "number"
+        ? entry.watchHour
+        : new Date().getHours(),
+    played: Boolean(entry.played),
+  };
+
+  const current = loadWatchHistory().filter(
+    (item) => !sameItem(item, normalized),
   );
-  const next = [entry, ...filtered].slice(0, LIMITS.watchHistory);
-  localStorage.setItem(WATCH_HISTORY_KEY, JSON.stringify(next));
+  const next = [normalized, ...current].slice(0, MAX_HISTORY);
+  writeArray(WATCH_HISTORY_KEY, next);
   return next;
 }
 
-export function clearWatchHistory() {
-  localStorage.removeItem(WATCH_HISTORY_KEY);
+/** Mark a title as actually played (used by continue-watching for movies). */
+export function markAsPlayed(id, mediaType, extra = {}) {
+  const current = loadWatchHistory();
+  const existing = current.find(
+    (item) => item.id === Number(id) && item.mediaType === mediaType,
+  );
+  return saveWatchHistoryEntry({
+    ...(existing || {}),
+    id,
+    mediaType,
+    title: extra.title || existing?.title,
+    poster_path: extra.poster_path ?? existing?.poster_path,
+    vote_average: extra.vote_average ?? existing?.vote_average,
+    genre_ids: extra.genre_ids || existing?.genre_ids || [],
+    played: true,
+    watchedAt: Date.now(),
+  });
 }
 
+export function clearWatchHistory() {
+  writeArray(WATCH_HISTORY_KEY, []);
+}
+
+/* ---------- Favorites ---------- */
+
 export function loadFavorites() {
-  try {
-    const raw = localStorage.getItem(FAVORITES_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const list = readArray(FAVORITES_KEY);
+  return Array.isArray(list) ? list : [];
 }
 
 export function isFavorite(id, mediaType) {
   return loadFavorites().some(
-    (f) => f.id === Number(id) && f.mediaType === mediaType,
+    (item) => item.id === Number(id) && item.mediaType === mediaType,
   );
 }
 
 export function toggleFavorite(entry) {
   const current = loadFavorites();
-  const exists = current.some(
-    (f) => f.id === entry.id && f.mediaType === entry.mediaType,
-  );
+  const normalized = normalizeEntry(entry);
+  const exists = current.some((item) => sameItem(item, normalized));
+
   const next = exists
-    ? current.filter(
-        (f) => !(f.id === entry.id && f.mediaType === entry.mediaType),
-      )
+    ? current.filter((item) => !sameItem(item, normalized))
     : [
         {
-          id: Number(entry.id),
-          mediaType: entry.mediaType,
-          title: entry.title || "Untitled",
-          poster_path: entry.poster_path || null,
-          vote_average: entry.vote_average || null,
+          ...normalized,
           addedAt: Date.now(),
         },
         ...current,
-      ].slice(0, LIMITS.favorites);
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+      ].slice(0, MAX_FAVORITES);
+
+  writeArray(FAVORITES_KEY, next);
   return { list: next, added: !exists };
 }
 
+export function removeFavorite(id, mediaType) {
+  const next = loadFavorites().filter(
+    (item) => !(item.id === Number(id) && item.mediaType === mediaType),
+  );
+  writeArray(FAVORITES_KEY, next);
+  return next;
+}
+
+/* ---------- Watchlist / My List (unified storage) ---------- */
+
 export function loadWatchlist() {
-  try {
-    const raw = localStorage.getItem(WATCHLIST_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const list = readArray(WATCHLIST_KEY);
+  return Array.isArray(list) ? list : [];
+}
+
+/** Alias used by MyListPage / Home via watchlist.js */
+export function loadMyList() {
+  return loadWatchlist();
 }
 
 export function isInWatchlist(id, mediaType) {
   return loadWatchlist().some(
-    (w) => w.id === Number(id) && w.mediaType === mediaType,
+    (item) => item.id === Number(id) && item.mediaType === mediaType,
   );
+}
+
+export function isInMyList(id, mediaType) {
+  return isInWatchlist(id, mediaType);
 }
 
 export function toggleWatchlist(entry) {
   const current = loadWatchlist();
-  const exists = current.some(
-    (w) => w.id === entry.id && w.mediaType === entry.mediaType,
-  );
+  const normalized = normalizeEntry(entry);
+  const exists = current.some((item) => sameItem(item, normalized));
+
   const next = exists
-    ? current.filter(
-        (w) => !(w.id === entry.id && w.mediaType === entry.mediaType),
-      )
+    ? current.filter((item) => !sameItem(item, normalized))
     : [
         {
-          id: Number(entry.id),
-          mediaType: entry.mediaType,
-          title: entry.title || "Untitled",
-          poster_path: entry.poster_path || null,
-          vote_average: entry.vote_average || null,
+          ...normalized,
           addedAt: Date.now(),
         },
         ...current,
-      ].slice(0, LIMITS.watchlist);
-  localStorage.setItem(WATCHLIST_KEY, JSON.stringify(next));
+      ].slice(0, MAX_WATCHLIST);
+
+  writeArray(WATCHLIST_KEY, next);
   return { list: next, added: !exists };
 }
 
-export const SCORE_WEIGHTS = {
-  historyLookback: 14,
-  maxRecencyWeight: 14,
-  mediaTypeMatchBonus: 1.4,
-  timeOfDayMatchWeight: 0.9,
-  timeOfDayWindowHours: 2,
-  ratingWeight: 0.25,
-  popularVoteBonus: 0.8,
-  popularVoteThreshold: 500,
-};
-
-export function getItemGenreIds(item) {
-  if (Array.isArray(item.genre_ids) && item.genre_ids.length) {
-    return item.genre_ids;
-  }
-  if (Array.isArray(item.genres) && item.genres.length) {
-    return item.genres.map((genre) => genre.id);
-  }
-  return [];
+export function toggleMyListItem(entry) {
+  return toggleWatchlist(entry);
 }
 
-function scoreCandidate(candidate, history, nowHour, weights = SCORE_WEIGHTS) {
-  const candidateGenres = getItemGenreIds(candidate);
-  if (!candidateGenres.length) return 0;
+export function removeFromWatchlist(id, mediaType) {
+  const next = loadWatchlist().filter(
+    (item) => !(item.id === Number(id) && item.mediaType === mediaType),
+  );
+  writeArray(WATCHLIST_KEY, next);
+  return next;
+}
 
-  const recentHistory = history.slice(0, weights.historyLookback);
-  let score = 0;
+export function removeFromMyList(id, mediaType) {
+  return removeFromWatchlist(id, mediaType);
+}
 
-  recentHistory.forEach((entry, index) => {
-    const recencyWeight = Math.max(1, weights.maxRecencyWeight - index);
-    const overlap = candidateGenres.filter((genreId) =>
-      (entry.genre_ids || []).includes(genreId),
-    ).length;
-    score += overlap * recencyWeight;
+/* ---------- "Because you watched" helper ---------- */
 
-    const candidateType =
-      candidate.media_type || (candidate.first_air_date ? "tv" : "movie");
-    if (entry.mediaType === candidateType) {
-      score += weights.mediaTypeMatchBonus;
-    }
+/**
+ * Simple genre-overlap recommendations from the local catalog + history.
+ * Used by Home.jsx. Expects a flat catalog of TMDB-like items.
+ */
+export function buildBecauseYouWatched(catalog = [], history = [], limit = 14) {
+  if (!catalog.length) return [];
 
-    if (
-      typeof entry.watchHour === "number" &&
-      Math.abs(entry.watchHour - nowHour) <= weights.timeOfDayWindowHours
-    ) {
-      score += overlap * weights.timeOfDayMatchWeight;
-    }
+  const recent = (history.length ? history : loadWatchHistory()).slice(0, 8);
+  if (!recent.length) {
+    // Cold start: high-rated popular-looking items
+    return catalog
+      .filter((i) => (i.vote_average || 0) >= 7 && i.poster_path)
+      .sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))
+      .slice(0, limit);
+  }
+
+  const watchedKeys = new Set(
+    recent.map((h) => `${h.mediaType || h.media_type}-${h.id}`),
+  );
+  const genreScores = new Map();
+
+  recent.forEach((h, index) => {
+    const weight = recent.length - index;
+    (h.genre_ids || []).forEach((gid) => {
+      genreScores.set(gid, (genreScores.get(gid) || 0) + weight);
+    });
   });
 
-  score += (candidate.vote_average || 0) * weights.ratingWeight;
-  if ((candidate.vote_count || 0) > weights.popularVoteThreshold) {
-    score += weights.popularVoteBonus;
-  }
-  return score;
-}
-
-export function buildBecauseYouWatched(
-  catalog,
-  history,
-  weights = SCORE_WEIGHTS,
-) {
-  if (!history.length) return [];
-
-  const excluded = new Set(
-    history.map((item) => `${item.mediaType}-${item.id}`),
-  );
-  const nowHour = new Date().getHours();
-
-  return catalog
+  const scored = catalog
     .filter((item) => {
-      const mediaType =
-        item.media_type || (item.first_air_date ? "tv" : "movie");
-      return !excluded.has(`${mediaType}-${item.id}`);
+      const type = item.media_type || (item.first_air_date ? "tv" : "movie");
+      const key = `${type}-${item.id}`;
+      return !watchedKeys.has(key) && item.poster_path;
     })
-    .map((item) => ({
-      item,
-      score: scoreCandidate(item, history, nowHour, weights),
-    }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, LIMITS.recommendations)
-    .map((entry) => entry.item);
-}
-
-export function buildMoodSuggestions(catalog, moodKey) {
-  const mood = MOOD_PRESETS[moodKey] || MOOD_PRESETS.chill;
-  return catalog
-    .filter((item) => {
-      const genres = getItemGenreIds(item);
-      return genres.some((genreId) => mood.genres.includes(genreId));
+    .map((item) => {
+      const genres = item.genre_ids || [];
+      let score = 0;
+      genres.forEach((gid) => {
+        score += genreScores.get(gid) || 0;
+      });
+      // slight boost for rating
+      score += (item.vote_average || 0) * 0.15;
+      return { item, score };
     })
-    .sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0))
-    .slice(0, LIMITS.recommendations);
-}
+    .filter((row) => row.score > 0)
+    .sort((a, b) => b.score - a.score);
 
-export function getContinueWatching(
-  history,
-  limit = LIMITS.continueWatchingDefault,
-) {
-  return history.slice(0, limit);
+  return scored.slice(0, limit).map((row) => row.item);
 }

@@ -17,6 +17,7 @@ import {
 import {
   buildBecauseYouWatched,
   loadWatchHistory,
+  loadFavorites,
 } from '../utils/recommendations';
 import {
   buildContinueWatching,
@@ -178,27 +179,50 @@ export default function Home() {
   const [watchHistory, setWatchHistory] = useState([]);
   const [continueItems, setContinueItems] = useState([]);
   const [myList, setMyList] = useState([]);
+  const [favorites, setFavorites] = useState([]);
   const [activeMood, setActiveMood] = useState(() => searchParams.get('mood') || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const moodRevealRef = useRef(null);
 
-  // Load local data on mount
+  // Load local data on mount (and when returning to the tab)
   useEffect(() => {
-    setWatchHistory(loadWatchHistory());
-    setContinueItems(buildContinueWatching());
+    function hydrateLocal() {
+      setWatchHistory(loadWatchHistory());
+      setContinueItems(buildContinueWatching());
+      setMyList(
+        loadMyList().map((item) => ({
+          ...item,
+          media_type: item.mediaType,
+          title: item.title,
+          name: item.title,
+        })),
+      );
+      setFavorites(
+        loadFavorites().map((item) => ({
+          ...item,
+          media_type: item.mediaType,
+          title: item.title,
+          name: item.title,
+        })),
+      );
+    }
+
+    hydrateLocal();
     let ignore = false;
-    buildContinueWatchingAsync().then((items) => {
-      if (!ignore) setContinueItems(items);
-    }).catch(() => {});
-    setMyList(loadMyList().map((item) => ({
-      ...item,
-      media_type: item.mediaType,
-      title: item.title,
-      name: item.title,
-    })));
-    return () => { ignore = true; };
+    buildContinueWatchingAsync()
+      .then((items) => {
+        if (!ignore) setContinueItems(items);
+      })
+      .catch(() => {});
+
+    const onFocus = () => hydrateLocal();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      ignore = true;
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   // Load TMDB data
@@ -428,14 +452,16 @@ export default function Home() {
               </section>
             )}
 
-            {/* ——— 3. Continue Watching (Only if > 3 items) ——— */}
-            {continueItems.length >= 3 && (
+            {/* ——— 3. Continue Watching (show as soon as there is progress) ——— */}
+            {continueItems.length >= 1 && (
               <section className="py-4 pb-12">
-                <SectionLabel>Continue Watching</SectionLabel>
+                <SectionLabel aside={<span className="text-[11px] text-[#5c5747]">{continueItems.length} in progress</span>}>
+                  Continue Watching
+                </SectionLabel>
                 <Carousel
-                  items={continueItems.slice(0, 10)}
+                  items={continueItems.slice(0, 12)}
                   renderItem={(item) => {
-                    const type = item.media_type || 'tv';
+                    const type = item.media_type || item.mediaType || 'tv';
                     const href = type === 'tv' && item.continueSeason && item.continueEpisode
                       ? `/tv/${item.id}/${item.continueSeason}/${item.continueEpisode}`
                       : `/title/${type}/${item.id}`;
@@ -494,13 +520,28 @@ export default function Home() {
               </section>
             )}
 
-            {/* ——— 5. Your List ——— */}
-            {myList.length > 0 && (
+            {/* ——— 5. Your List + Favorites ——— */}
+            {/* {myList.length > 0 && (
               <section className="py-6">
-                <SectionLabel aside={<span className="text-[11px] text-[#5c5747]">{myList.length} saved</span>}>
+                <SectionLabel
+                  aside={
+                    <Link to="/my-list" className="text-[11px] text-[#5c5747] underline-offset-2 hover:text-[#a79f8a] hover:underline">
+                      {myList.length} saved · View all
+                    </Link>
+                  }
+                >
                   Your List
                 </SectionLabel>
                 <Carousel items={myList.slice(0, 12)} renderItem={(item) => <CompactTitleCard item={item} className="w-[120px] sm:w-[140px]" />} />
+              </section>
+            )} */}
+
+            {favorites.length > 0 && (
+              <section className="py-6">
+                <SectionLabel aside={<span className="text-[11px] text-[#5c5747]">{favorites.length} liked</span>}>
+                  Favorites
+                </SectionLabel>
+                <Carousel items={favorites.slice(0, 12)} renderItem={(item) => <CompactTitleCard item={item} className="w-[120px] sm:w-[140px]" />} />
               </section>
             )}
 
